@@ -1,80 +1,102 @@
-  
-#!/bin/sh
+#!/bin/bash
+#
+# Copyright (c) 2019-2020 P3TERX <https://p3terx.com>
+#
+# This is free software, licensed under the MIT License.
+# See /LICENSE for more information.
+#
+# https://github.com/P3TERX/Actions-OpenWrt
+# File name: diy-part2.sh
+# Description: OpenWrt DIY script part 2 (After Update feeds)
+#
 
-uci set luci.main.lang=zh_cn
-uci commit luci
+# Modify default IP
+#sed -i 's/192.168.1.1/192.168.50.5/g' package/base-files/files/bin/config_generate
 
-# 固件名称
-uci set system.@system[0].hostname=Netgear_R7800
-uci set system.@system[0].timezone=CST-8
-uci set system.@system[0].zonename=Asia/Shanghai
-uci commit system
+# 清除旧版argon主题并拉取最新版
+pushd ../package/lean
+rm -rf luci-theme-argon
+git clone -b 18.06 https://github.com/jerrykuku/luci-theme-argon luci-theme-argon
 
-# 默认开启网络加速
-uci set flowoffload.@flow[0]=flow
-uci set flowoffload.@flow[0].bbr=1
-uci set flowoffload.@flow[0].dns=1
-uci commit flowoffload
+# 更改主题
+sed -i 's/luci-theme-bootstrap/luci-theme-argon/g' ../feeds/luci/collections/luci/Makefile
 
-# 默认开启解锁网易云灰色歌曲
-uci set unblockmusic.@unblockmusic[0].enabled=1
-uci commit unblockmusic
+# 更改时区
+sed -i "s/'UTC'/'CST-8'\n        set system.@system[-1].zonename='Asia\/Shanghai'/g" ../package/base-files/files/bin/config_generate
 
-uci set fstab.@global[0].anon_mount=1
-uci commit fstab
+# Add Project OpenWrt's autocore
+rm -rf autocore
+svn co https://github.com/project-openwrt/openwrt/branches/18.06-kernel5.4/package/lean/autocore
+popd
 
-rm -f /usr/lib/lua/luci/view/admin_status/index/mwan.htm
-rm -f /usr/lib/lua/luci/view/admin_status/index/upnp.htm
-rm -f /usr/lib/lua/luci/view/admin_status/index/ddns.htm
-rm -f /usr/lib/lua/luci/view/admin_status/index/minidlna.htm
+# Add mentohust & luci-app-mentohust.
+git clone --depth=1 https://github.com/BoringCat/luci-app-mentohust
+git clone --depth=1 https://github.com/KyleRicardo/MentoHUST-OpenWrt-ipk
 
-sed -i 's/\"services\"/\"nas\"/g' /usr/lib/lua/luci/controller/aria2.lua
-sed -i 's/services/nas/g' /usr/lib/lua/luci/view/aria2/overview_status.htm
-sed -i 's/\"services\"/\"nas\"/g' /usr/lib/lua/luci/controller/hd_idle.lua
-sed -i 's/\"services\"/\"nas\"/g' /usr/lib/lua/luci/controller/samba.lua
-sed -i 's/\"services\"/\"nas\"/g' /usr/lib/lua/luci/controller/minidlna.lua
-sed -i 's/\"services\"/\"nas\"/g' /usr/lib/lua/luci/controller/transmission.lua
-sed -i 's/\"services\"/\"nas\"/g' /usr/lib/lua/luci/controller/mjpg-streamer.lua
-sed -i 's/\"services\"/\"nas\"/g' /usr/lib/lua/luci/controller/p910nd.lua
-sed -i 's/\"services\"/\"nas\"/g' /usr/lib/lua/luci/controller/usb_printer.lua
-sed -i 's/\"services\"/\"nas\"/g' /usr/lib/lua/luci/controller/xunlei.lua
-sed -i 's/services/nas/g'  /usr/lib/lua/luci/view/minidlna_status.htm
+# Add ServerChan
+git clone --depth=1 https://github.com/tty228/luci-app-serverchan
 
-ln -sf /sbin/ip /usr/bin/ip
+# Add OpenClash
+git clone --depth=1 -b master https://github.com/vernesong/OpenClash
 
-sed -i 's/downloads.openwrt.org/openwrt.proxy.ustclug.org/g' /etc/opkg/distfeeds.conf
-sed -i 's/http:/https:/g' /etc/opkg/distfeeds.conf
-sed -i 's/root::0:0:99999:7:::/root:$1$V4UetPzk$CYXluq4wUazHjmCDBCqXF.:0:0:99999:7:::/g' /etc/shadow
+# Add luci-app-onliner (need luci-app-nlbwmon)
+git clone --depth=1 https://github.com/rufengsuixing/luci-app-onliner
 
-sed -i "s/# //g" /etc/opkg/distfeeds.conf
+# Add luci-app-adguardhome
+svn co https://github.com/Lienol/openwrt/trunk/package/diy/luci-app-adguardhome
+svn co https://github.com/Lienol/openwrt/trunk/package/diy/adguardhome
 
-# 设置默认管理IP地址
-uci set network.lan.ipaddr='10.0.0.1'
-uci set network.lan.netmask='255.255.255.0'
-uci set network.lan.delegate='0'
-uci set network.wan.delegate='0'
-uci commit network
+# Add luci-app-diskman
+git clone --depth=1 https://github.com/lisaac/luci-app-diskman
+mkdir parted
+cp luci-app-diskman/Parted.Makefile parted/Makefile
 
-sed -i '/REDIRECT --to-ports 53/d' /etc/firewall.user
-echo "iptables -t nat -A PREROUTING -p udp --dport 53 -j REDIRECT --to-ports 53" >> /etc/firewall.user
-echo "iptables -t nat -A PREROUTING -p tcp --dport 53 -j REDIRECT --to-ports 53" >> /etc/firewall.user
+# Add luci-app-dockerman
+rm -rf ../lean/luci-app-docker
+git clone --depth=1 https://github.com/KFERMercer/luci-app-dockerman
+git clone --depth=1 https://github.com/lisaac/luci-lib-docker
 
-sed -i '/option disabled/d' /etc/config/wireless
-sed -i '/set wireless.radio${devidx}.disabled/d' /lib/wifi/mac80211.sh
+# Add luci-app-gowebdav
+git clone --depth=1 https://github.com/project-openwrt/openwrt-gowebdav
 
-sed -i '/DISTRIB_REVISION/d' /etc/openwrt_release
-echo "DISTRIB_REVISION='V2020'" >> /etc/openwrt_release
-sed -i '/DISTRIB_DESCRIPTION/d' /etc/openwrt_release
-echo "DISTRIB_DESCRIPTION='OpenWrt Build By Pjoyrom'" >> /etc/openwrt_release
+# Add luci-app-jd-dailybonus
+git clone --depth=1 https://github.com/jerrykuku/node-request
+git clone --depth=1 https://github.com/jerrykuku/luci-app-jd-dailybonus
 
-sed -i '/log-facility/d' /etc/dnsmasq.conf
-echo "log-facility=/dev/null" >> /etc/dnsmasq.conf
+# Add luci-theme-rosy
+svn co https://github.com/project-openwrt/openwrt/trunk/package/ctcgfw/luci-theme-rosy
 
-sed -i 's/cbi.submit\"] = true/cbi.submit\"] = \"1\"/g' /usr/lib/lua/luci/dispatcher.lua
+# Add tmate
+git clone --depth=1 https://github.com/project-openwrt/openwrt-tmate
 
-echo 'hsts=0' > /root/.wgetrc
+# Add subconverter
+git clone --depth=1 https://github.com/tindy2013/openwrt-subconverter
 
-rm -rf /tmp/luci-modulecache/
-rm -f /tmp/luci-indexcache
+# Add gotop
+svn co https://github.com/project-openwrt/openwrt/trunk/package/ctcgfw/gotop
 
-exit 0
+# Add smartdns
+svn co https://github.com/pymumu/smartdns/trunk/package/openwrt ../smartdns
+svn co https://github.com/project-openwrt/openwrt/trunk/package/ntlf9t/luci-app-smartdns ../luci-app-smartdns
+
+# Add udptools
+git clone --depth=1 https://github.com/bao3/openwrt-udp2raw
+git clone --depth=1 https://github.com/bao3/openwrt-udpspeeder
+git clone --depth=1 https://github.com/bao3/luci-udptools
+
+# Add OpenAppFilter
+git clone --depth=1 https://github.com/destan19/OpenAppFilter
+popd
+
+# Mod zzz-default-settings
+pushd package/lean/default-settings/files
+sed -i "/commit luci/i\uci set luci.main.mediaurlbase='/luci-static/argon'" zzz-default-settings
+sed -i '/http/d' zzz-default-settings
+sed -i '/exit/i\chmod +x /bin/ipv6-helper' zzz-default-settings
+popd
+
+# Add po2lmo
+git clone https://github.com/openwrt-dev/po2lmo.git
+pushd po2lmo
+make && sudo make install
+popd
