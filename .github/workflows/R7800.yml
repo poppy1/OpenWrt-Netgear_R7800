@@ -24,6 +24,7 @@ on:
     branches: 
        - main
  
+ # 定时编译
     schedule:
     - cron: 0 4 * * 5
 
